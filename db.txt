@@ -15,17 +15,17 @@ Przyjaciółka zwierząt, gór, wulkanicznych kamieni i lasów. Entuzjastka
 ciekawostek i zagadek. Inspirowana przez Matkę Naturę, ludzi i
 podróże.
 EOF-0123456789
-page-about-title	text	Name Surname
+page-about-title	Name Surname
 page-contact-list01	url	tel:+48012345678	phone number	48 012 345 678
-page-contact-list01-label	text	T:
+page-contact-list01-label	T:
 page-contact-list02	url	mailto:mail@abc.pl	send email	mail@abc.pl
-page-contact-list02-label	text	E:
-page-contact-title	text	Zróbmy coś
-page-contact-title01	text	dobrego!
-page-contact-title02	text	inspirującego!
-page-contact-title03	text	znaczącego!
-page-home-description	text	Uważam, że Twoja marka powinna być wyjątkowa. Angażuję się emocjonalnie w każdy projekt, moje podejście do procesu twórczego opiera się na wzajemnym zrozumieniu i partnerskiej współpracy.
-page-home-title	text	Cześć!<br>Fajnie, że jesteś.
+page-contact-list02-label	E:
+page-contact-title	Zróbmy coś
+page-contact-title01	dobrego!
+page-contact-title02	inspirującego!
+page-contact-title03	znaczącego!
+page-home-description	Uważam, że Twoja marka powinna być wyjątkowa. Angażuję się emocjonalnie w każdy projekt, moje podejście do procesu twórczego opiera się na wzajemnym zrozumieniu i partnerskiej współpracy.
+page-home-title	Cześć!<br>Fajnie, że jesteś.
 page-project01-slappa	url	/projects/slappa	slappa	Släppa
 page-project01-slappa-thumbnail01	img	/images/slappa_cover_a-2048.jpg	thumbnail 1	Släppa
 page-project01-slappa-thumbnail02	img	/images/slappa_cover_b-2048.jpg	thumbnail 2	Släppa

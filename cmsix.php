@@ -1,94 +1,72 @@
-<?php
-namespace cmsix;
+<?php namespace cmsix;
 
-class Cmsix
+/**
+ * Read data file from $path.  Return dictionary sorted by keys.
+ */
+function read(?string $path = './db.txt'): array
 {
-    private readonly mixed $file; // Database text file
-    public array $data;           // Parsed $file lines
-    
-    function __construct(string $path = "./db.txt")
-    {
-        $this->file = fopen($path, 'r');
-        $this->data = [];
-
-        if (!is_resource($this->file)) {
-            echo "Can't open '$path' file".PHP_EOL;
-            return;
-        }
-        while (($line = fgets($this->file))) {
-            $this->parse_line($line);
-        }
-        ksort($this->data);
+    $data = [];
+    $file = fopen($path, 'r');
+    if (!is_resource($file)) {
+        echo "Can't open '$path' file".PHP_EOL;
+        return $data;
     }
-
-    function __destruct()
-    {
-        fclose($this->file);
-    }
-
-    private function parse_line(string $line): void
-    {
+    while (($line = fgets($file))) {
         $parts = array_map('trim', explode("\t", $line));
         $key   = $parts[0];
-        $entry = ["type" => strtolower($parts[1])];
-
-        switch ($entry["type"]) {
-        case "area":            // Multi line textarea
+        $type  = strtolower($parts[1]);
+        $entry;
+        // Search for non text content when there are more than 2
+        // parts in line.  Otherwise force default behavior.
+        switch (count($parts) > 2 ? $parts[1] : null) {
+        case 'area':            // Multi line textarea
             $end = $parts[2];
-            $entry["value"] = "";
+            $entry = '';
             // TODO(irek): Validate all esential parts of line
             // like this one that is very much required.
-            while (($line = fgets($this->file)) and trim($line) != $end) {
-                $entry["value"] .= $line;
+            while (($line = fgets($file)) and trim($line) != $end) {
+                $entry .= $line;
             }
             unset($end);
-            $entry["value"] = trim($entry["value"]);
+            $entry = trim($entry);
             break;
-        case "bool":
-            $entry["value"] = strtolower($parts[2]) == "true";
+        case 'bool':
+            $entry = strtolower($parts[2]) == 'true';
             break;
-        case "int":
-            $entry["value"] = intval($parts[2]) ?? "0";
+        case 'int':
+            $entry = intval($parts[2]) ?? 0;
             break;
-        case "text":
-            $entry["value"] = $parts[2] ?? "Lorem ipsum";
+        case 'url':
+            $entry = [
+                'href'  => $parts[2] ?? '#',
+                'title' => $parts[3] ?? 'link',
+                'text'  => $parts[4] ?? 'link',
+            ];
             break;
-        case "url":
-            $entry["url"]   = $parts[2] ?? "#";
-            $entry["title"] = $parts[3] ?? "link";
-            $entry["value"] = $parts[4] ?? "link";
+        case 'img':
+            $entry = [
+                'src'   => $parts[2] ?? '',
+                'title' => $parts[3] ?? 'image',
+            ];
             break;
-        case "img":
-            $entry["url"]   = $parts[2] ?? "";
-            $entry["title"] = $parts[3] ?? "image";
-            break;
-        default:
-            // TODO(irek): Some kind of error or warrning would be nice.
-            echo "Invalid field type ".$entry["type"].PHP_EOL;
-            return;             // Skip invalid type
+        default:              // Regular text, no type prefix required
+            $entry = $parts[1] ?? 'Lorem ipsum';
         }
-        $this->data[$key] = $entry;
+        $data[$key] = $entry;
     }
-
-    public function get(?string $regexp = "//", ?string $type = NULL): array
-    {
-        return array_filter(
-            $this->data,
-            fn($v, $k) => preg_match($regexp, $k) // Filter by key
-            and (!$type or $v["type"] == $type),  // Filter by type
-            ARRAY_FILTER_USE_BOTH
-        );
-    }
+    fclose($file);
+    ksort($data);
+    return $data;
 }
 
-// TODO(irek): $path could be set by value of cookie or query
-// parameter.  That way we can have multiple databased on server and
-// switch between them for test purposes.
-$path  = "./db.txt";
-$cmsix = new Cmsix($path);
-
-$nav   = $cmsix->get("/^nav/");     // Get website navigation links
-$area  = $cmsix->get("//", "area"); // Get entries with area type
-
-print_r($nav);
-print_r($area);
+/**
+ * Filter $arr by keys using $regexp.
+ */
+function get(array $arr, string $regexp): array
+{
+    return array_filter(
+        $arr,
+        fn($key) => preg_match($regexp, $key),
+        ARRAY_FILTER_USE_KEY
+    );
+}
