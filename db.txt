@@ -1,36 +1,123 @@
-comments	int	11
-feature01-enable	bool	true
-feature02-enable	bool	false
-footer01	url	https://www.behance.net/account	behance	Behance
-footer02	url	https://instagram.com/account	instragram	Instagram
-nav00	url	/	home	strona główna
-nav01	url	/about	about	o mnie
-nav02	url	/projects	projects	projekty
-nav03	url	/contact	contact	kontakt
-page-about-description	area	EOF-0123456789
+comments
+int
+11
+
+feature01-enable
+bool
+true
+
+feature02-enable
+bool
+false
+
+footer01
+https://www.behance.net/account
+behance
+Behance
+
+footer02
+https://instagram.com/account
+instragram
+Instagram
+
+nav00
+/
+home
+strona główna
+
+nav01
+/about
+about
+o mnie
+
+nav02
+/projects
+projects
+projekty
+
+nav03
+/contact
+contact
+kontakt
+
+page-about-description	11111111111111111111111
 Sympatyczka poprawnej typografii, wielbicielka minimalistycznego
 designu, prostego języka, jasnego przekazu. Niewolnica perfekcjonizmu.
 
 Przyjaciółka zwierząt, gór, wulkanicznych kamieni i lasów. Entuzjastka
 ciekawostek i zagadek. Inspirowana przez Matkę Naturę, ludzi i
 podróże.
-EOF-0123456789
-page-about-title	Name Surname
-page-contact-list01	url	tel:+48012345678	phone number	48 012 345 678
-page-contact-list01-label	T:
-page-contact-list02	url	mailto:mail@abc.pl	send email	mail@abc.pl
-page-contact-list02-label	E:
-page-contact-title	Zróbmy coś
-page-contact-title01	dobrego!
-page-contact-title02	inspirującego!
-page-contact-title03	znaczącego!
-page-home-description	Uważam, że Twoja marka powinna być wyjątkowa. Angażuję się emocjonalnie w każdy projekt, moje podejście do procesu twórczego opiera się na wzajemnym zrozumieniu i partnerskiej współpracy.
-page-home-title	Cześć!<br>Fajnie, że jesteś.
-page-project01-slappa	url	/projects/slappa	slappa	Släppa
-page-project01-slappa-thumbnail01	img	/images/slappa_cover_a-2048.jpg	thumbnail 1	Släppa
-page-project01-slappa-thumbnail02	img	/images/slappa_cover_b-2048.jpg	thumbnail 2	Släppa
-page-project02-sunflow	url	/projects/sunflow	sunflow	Sunflow
-page-project03-ferity	url	/projects/ferity	ferity	Ferity
-page01-hide	bool	false
-page02-hide	bool	true
-subscribers	int	24
+11111111111111111111111
+
+page-about-title
+Name Surname
+
+page-contact-list01
+T:
+url
+tel:+48012345678
+phone number
+48 012 345 678
+
+page-contact-list02
+M:
+mailto:mail@abc.pl
+send email
+mail@abc.pl
+
+page-contact-title
+Zróbmy coś
+
+page-contact-title-texts
+dobrego!
+inspirującego!
+znaczącego!
+
+page-home-description
+Uważam, że Twoja marka powinna być wyjątkowa. Angażuję się emocjonalnie w każdy projekt, moje podejście do procesu twórczego opiera się na wzajemnym zrozumieniu i partnerskiej współpracy.
+
+page-home-title
+Cześć!<br>Fajnie, że jesteś.
+
+page-project01-slappa
+/projects/slappa
+slappa
+Släppa
+
+page-project01-slappa-thumbnail01
+/images/slappa_cover_a-2048.jpg
+thumbnail 1
+Släppa
+
+page-project01-slappa-thumbnail02
+/images/slappa_cover_b-2048.jpg
+thumbnail 2
+Släppa
+
+page-project02-sunflow
+/projects/sunflow
+sunflow
+Sunflow
+
+page-project03-ferity
+/projects/ferity
+ferity
+Ferity
+
+page01-hide
+bool
+false
+
+page02-hide
+bool
+true
+
+subscribers
+int
+24
+
+custom_table_1	EOL-01234567
+col1,col2,col3
+aaaa,bbbb,cccc
+dddd,eeee,ffff
+EOL-01234567
