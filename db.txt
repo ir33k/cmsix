@@ -2,6 +2,11 @@ comments
 int
 11
 
+custom_table_1
+col1,col2,col3
+aaaa,bbbb,cccc
+dddd,eeee,ffff
+
 feature01-enable
 bool
 true
@@ -23,7 +28,7 @@ Instagram
 nav00
 /
 home
-strona główna
+strona główna 2
 
 nav01
 /about
@@ -40,14 +45,14 @@ nav03
 contact
 kontakt
 
-page-about-description	11111111111111111111111
+page-about-description	END-63f7460198d70
 Sympatyczka poprawnej typografii, wielbicielka minimalistycznego
 designu, prostego języka, jasnego przekazu. Niewolnica perfekcjonizmu.
 
 Przyjaciółka zwierząt, gór, wulkanicznych kamieni i lasów. Entuzjastka
 ciekawostek i zagadek. Inspirowana przez Matkę Naturę, ludzi i
 podróże.
-11111111111111111111111
+END-63f7460198d70
 
 page-about-title
 Name Surname
@@ -73,8 +78,13 @@ dobrego!
 inspirującego!
 znaczącego!
 
-page-home-description
-Uważam, że Twoja marka powinna być wyjątkowa. Angażuję się emocjonalnie w każdy projekt, moje podejście do procesu twórczego opiera się na wzajemnym zrozumieniu i partnerskiej współpracy.
+page-home-description	END-63f7460198e4e
+Uważam, że Twoja marka powinna być wyjątkowa.
+
+Angażuję się emocjonalnie w każdy projekt, moje podejście
+do procesu twórczego opiera się na wzajemnym zrozumieniu
+i partnerskiej współpracy.
+END-63f7460198e4e
 
 page-home-title
 Cześć!<br>Fajnie, że jesteś.
@@ -116,8 +126,3 @@ subscribers
 int
 24
 
-custom_table_1	EOL-01234567
-col1,col2,col3
-aaaa,bbbb,cccc
-dddd,eeee,ffff
-EOL-01234567
