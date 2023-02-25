@@ -1,5 +1,8 @@
 <?php namespace cmsix;
 
+/** CMSIX version number. */
+const VERSION = '1.0';
+
 /** Prefix used to avoid potential conflict in key names. */
 const PREFIX = '_CMSX_PREFIX';
 
