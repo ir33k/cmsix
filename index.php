@@ -3,16 +3,16 @@
 require './cmsix.php';
 
 /** Password hashed with password_hash() function. */
-const PASSWORD_HASH = '$2y$10$yIAuLHVoKXn8sczLwI27he0ELLMEQi3BxYtWVPESlR/lbh4TYxKsW';
+define('PASSWORD_HASH', '$2y$10$yIAuLHVoKXn8sczLwI27he0ELLMEQi3BxYtWVPESlR/lbh4TYxKsW');
 
 /** Path to file used to read and write data. */
-const FPATH = './db.txt';
+define('FPATH', './db.txt');
 
 /** Key name of active session in $_SESSION array. */
-const SESSION_KEY = 'PASS_HASH';
+define('SESSION_KEY', 'PASS_HASH');
 
 /** Name of browser session cookie. */
-const SESSION_COOKIE = 'CMSIX_SESSION_ID';
+define('SESSION_COOKIE', 'CMSIX_SESSION_ID');
 
 /** Expiry session after 60 min. */
 define('SESSION_EXPIRY', time() + 60*60);
