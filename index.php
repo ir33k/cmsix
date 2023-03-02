@@ -3,7 +3,10 @@
 require './cmsix.php';
 
 /** Password hashed with password_hash() function. */
-define('PASSWORD_HASH', '$2y$10$yIAuLHVoKXn8sczLwI27he0ELLMEQi3BxYtWVPESlR/lbh4TYxKsW');
+define('PASSWORD_HASH', '$2y$10$sj7Q4h.T6iOlh1K24ZEOe.sytdfkUCgFt1n9/nxOLlxLpYeEXN9Gi');
+
+/** Password salt used to make hashing stronger. */
+define('PASSWORD_SALT', 'batHMwtcn/HgAT86DpFvNjs5Zl57N0TMJ8K50B4TKdU=');
 
 /** Path to file used to read and write data. */
 define('FPATH', './db.txt');
@@ -44,7 +47,11 @@ unset($tmp);
 if (!isset($page) and preg_match('/^\/hash/', $url_args)) {
 	$page = Page::Hash;
 	if (isset($_GET['password'])) {
-		echo password_hash($_GET['password'], PASSWORD_DEFAULT);
+		$salt = base64_encode(random_bytes(32));
+		echo '<pre>';
+		echo 'hash: '.password_hash($salt . $_GET['password'], PASSWORD_DEFAULT).PHP_EOL;
+		echo 'salt: '.$salt.PHP_EOL;
+		echo '</pre>';
 		exit(0);
 	}
 }
@@ -52,7 +59,7 @@ if (!isset($page) and preg_match('/^\/hash/', $url_args)) {
 if (!isset($page) and preg_match('/^\/login/', $url_args)) {
 	$page = Page::Login;
 	if (isset($_POST['password'])) {
-		if (password_verify($_POST['password'], PASSWORD_HASH)) {
+		if (password_verify(PASSWORD_SALT . $_POST['password'], PASSWORD_HASH)) {
 			// Login
 			$session = uniqid();
 			$_SESSION[SESSION_KEY] = $session;
