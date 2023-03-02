@@ -84,7 +84,7 @@ if (!isset($page)) {
     // Refresh session cookie.
     set_auth_cookie($cookie);
     //
-    $data = cmsix\read(FPATH)['texts'];
+    $data = cmsix\read(FPATH);
     if (isset($_POST[cmsix\PREFIX.'_update'])) {
         foreach ($_POST as $k => $v) {
             if (isset($data['texts'][$k])) {
@@ -110,7 +110,7 @@ if (!isset($page)) {
 <title>cmsix</title>
 <style>
 body {
-    background-color: #fff;
+    background-color: #efefef;
     padding: min(4vw, 4vh);
     max-width: 42em;
     margin: 0 auto;
@@ -175,10 +175,10 @@ footer {
     <h2>Admin page</h2>
     <p>Modify at least one field and submit to make a change.</p>
     <form method=post>
-        <?php foreach ($data as $k => $v): ?>
+        <?php foreach ($data['texts'] as $k => $v): ?>
             <article id=<?=$k?>>
                 <h3><code><?=$k?></code></h3>
-                <textarea cols=80 rows=10 width=100% name=<?=$k?>><?=$v?></textarea>
+                <textarea cols=80 rows=<?=substr_count($v, "\n")+1?> width=100% name=<?=$k?>><?=$v?></textarea>
             </article>
         <?php endforeach ?>
         <p><input type=submit name=<?=cmsix\PREFIX?>_update></p>
