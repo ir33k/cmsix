@@ -1,10 +1,10 @@
 <?php
 require './cmsix.php';
 
-// Password SALT and HASH can be generated on /hash page.
-// Salt is just a string with random characters.
-// Hash is value returned by password_hash(), salt + password.
-//
+/* Password SALT and HASH can be generated on /hash page.
+ * Salt is just a string with random characters.
+ * Hash is value returned by password_hash(), salt + password.
+ */
 const PASS_HASH = '$2y$10$sj7Q4h.T6iOlh1K24ZEOe.sytdfkUCgFt1n9/nxOLlxLpYeEXN9Gi';
 const PASS_SALT = 'batHMwtcn/HgAT86DpFvNjs5Zl57N0TMJ8K50B4TKdU=';
 
@@ -20,24 +20,40 @@ enum Page {             // Each possible page, used to set $page var
 	case Logout;    // Upon visiting logout from active session
 	                // NEXT PAGES REQUIRE AUTHENTICATION
 	case Text;      // Main page for editing values in DB file
-	case File;      // View, add and remove files
+	case File;      // Page to view, add and remove files
 }
 
+$page;                  // Used to choice which page to render
 $data = [];             // Data required to render given page
 $msg  = [];             // Messages to show on page, if any
 
-$tmp = explode(basename(__FILE__), $_SERVER['PHP_SELF']);
-$url_args  = array_pop($tmp);           // Path beyond this file path
-$url_root  = array_pop($tmp);           // Path to this file
-$url_dpath = $url_root.DPATH;           // Path to files dir
+$path_info = $_SERVER['PATH_INFO'] ?? '/';
+$url_root  = str_replace('index.php', '', $_SERVER['SCRIPT_NAME']);
+$url_dpath = $url_root.DPATH;
 
-unset($tmp);
+/** Return true if $f file name has bitmap image extension. */
+function is_img(string $f): bool
+{
+	$ext = pathinfo($f)['extension'] ?? '';
+	return in_array($ext, ['jpg', 'jpeg', 'gif', 'png']);
+}
+
+/** Return true if given $f file is unsafe to upload and download. */
+function ignore_file(string $f): bool
+{
+	return str_starts_with($f, '.')       ||        // Is hidden
+	       str_ends_with($f, '.html')     ||        // Is HTML
+	       str_ends_with($f, '.php')      ||        // Is PHP
+	       str_contains($f, cmsix\PREFIX) ||        // Is internal
+	       is_dir($f);                              // Is dir
+}
+
 session_start();
 
 if (isset($_GET['msg'])) {              // Get page message from query
 	array_push($msg, $_GET['msg']);
 }
-if (!isset($page) and str_starts_with($url_args, '/hash')) {
+if (!isset($page) and str_starts_with($path_info, '/hash')) {
 	$page = Page::Hash;
 	if (isset($_GET['pass'])) {
 		$salt = base64_encode(random_bytes(32));
@@ -49,7 +65,7 @@ if (!isset($page) and str_starts_with($url_args, '/hash')) {
 		exit(0);                // End here, else render page
 	}
 }
-if (!isset($page) and str_starts_with($url_args, '/login')) {
+if (!isset($page) and str_starts_with($path_info, '/login')) {
 	$page = Page::Login;
 	if (isset($_POST['pass'])) {
 		if (password_verify(PASS_SALT.$_POST['pass'], PASS_HASH)) {
@@ -65,10 +81,10 @@ if (!isset($page) and str_starts_with($url_args, '/login')) {
 		array_push($msg, 'Invalid password!');
 	}
 }
-if (!isset($page) and str_starts_with($url_args, '/logout')) {
+if (!isset($page) and str_starts_with($path_info, '/logout')) {
 	$page = Page::Logout;
 	$_SESSION[S_KEY] = null;                // Not necessary
-	setcookie(S_COOKIE, '', time() -1);     // Remove cookie
+	setcookie(S_COOKIE, '', time()-1);      // Remove cookie
 	session_destroy();
 	array_push($msg, "You have been loged out successfully.");
 }
@@ -86,9 +102,8 @@ if (!isset($page)) {                            // Authorize next pages
 		'samesite' => 'Strict',
 	]);
 }
-if (!isset($page) and str_starts_with($url_args, '/file')) {
+if (!isset($page) and str_starts_with($path_info, '/file')) {
 	$page = Page::File;
-	$data = ['files' => [], 'sets' => []];
 	if (!is_dir(DPATH) and !mkdir(DPATH)) {
 		array_push($msg, "ERROR: Can't make ".DPATH);
 		goto skip;
@@ -109,13 +124,25 @@ if (!isset($page) and str_starts_with($url_args, '/file')) {
 		// exists.  I want to give possiblity to overwrite
 		// existing files.  But this might not be the best
 		// way to do it.
+		// TODO(irek): Optimize image files.
 		$count = count($files['name']);
 		for ($i = 0; $i < $count; $i++) {
-			$src = $files['tmp_name'][$i];
-			$dst = DPATH.$files['name'][$i];
+			$name = $files['name'][$i];
+			$ignored = [];
+			if (ignore_file($name)) {
+			    	array_push($ignored, $name);
+				continue;
+			}
+			$src  = $files['tmp_name'][$i];
+			$dst  = DPATH.$name;
 			move_uploaded_file($src, $dst);
 		}
-		array_push($msg, "Uploade complete.");
+		array_push($msg, 'Uploade complete.');
+		if (count($ignored)) {
+			array_push($msg, sprintf('<b>Ignored files: %s.</b><br>Files that starts with dot, ends with .html or .php, contains "%s" string, or are existing directories will be skipped.',
+			                         implode(', ', $ignored),
+						 cmsix\PREFIX));
+		}
 	}
 	// This error should not be possible but let's handle it.
 	if (!($dir = opendir(DPATH))) {
@@ -123,43 +150,28 @@ if (!isset($page) and str_starts_with($url_args, '/file')) {
 		goto skip;
 	}
 	while ($f = readdir($dir)) {
-		if (str_starts_with($f, '.')   ||       // Skip hidden
-		    str_ends_with($f, '.html') ||       // Skip .html
-		    str_ends_with($f, '.php')  ||       // Skip .php
-		    is_dir($f)) {                       // Skip dirs
+		if (ignore_file($f)) {
 			continue;
 		}
-		if (str_contains($f, cmsix\PREFIX)) {   // Cmsix file
-			[$k] = explode(cmsix\PREFIX, $f);
-			if (!isset($data['sets'][$k])) {
-				$data['sets'][$k] = [];
-			}
-			array_push($data['sets'][$k], $f);
-			continue;
-		}
-		array_push($data['files'], $f);          // Normal file
+		array_push($data, $f);
 	}
-	unset($f);
 	closedir($dir);
-	unset($dir);
-	sort($data['files']);
-	ksort($data['sets']);
-	array_map('sort', $data['sets']);
+	sort($data);
 }
-if (!isset($page)) {                                    // Default page
+if (!isset($page)) {                            // Default page
 	$page = Page::Text;
 	$data = cmsix\read(FPATH);
 	if (count($_POST)) {
 		foreach ($_POST as $k => $v) {
-			if (isset($data['texts'][$k])) {
-				$data['texts'][$k] = $v;
+			if (isset($data[$k])) {
+				$data[$k] = $v;
 			}
 		}
 		if (!is_resource($file = fopen(FPATH, 'wb'))) {
 			array_push($msg, "ERROR: Can't open ".FPATH);
 			goto skip;
 		}
-		foreach ($data['texts'] as $k => $v) {
+		foreach ($data as $k => $v) {
 			fwrite($file, $k);
 			$v = str_replace('', '', $v);
 			$v = rtrim($v) . "\n";
@@ -177,8 +189,8 @@ if (!isset($page)) {                                    // Default page
 		array_push($msg, "Texts have been updated.");
 	}
 }
-skip:           // Goto label to skip code in case of fatal error
-                // but when you still want to render the website.
+skip:           // GOTO label to skip code in case of fatal error
+                // but you still want to show website with message.
 ?>
 <!DOCTYPE html>
 <html lang=en>
@@ -201,7 +213,6 @@ body {
 	background-color: #fff;
 	padding: min(4vw, 4vh);
 	max-width: 38em;
-	margin: 0 auto;
 	line-height: 1.3;
 	font-family:     /* Source: http://web.mit.edu/jmorzins/www */
 		"Bookman Old Style",    /* Windows, MacOS           */
@@ -280,7 +291,7 @@ img { display: block; max-width: 100%; border: 1px solid #000 }
 	<h1>Texts</h1>
 	<p>Modify at least one field and submit to make a change.</p>
 	<form method=post>
-		<?php foreach ($data['texts'] as $k => $v): ?>
+		<?php foreach ($data as $k => $v): ?>
 			<h3 id=<?=$k?>><code><?=$k?></code></h3>
 			<textarea cols=80 rows=<?=substr_count($v,"\n")+1?> name=<?=$k?>><?=$v?></textarea>
 		<?php endforeach ?>
@@ -289,26 +300,19 @@ img { display: block; max-width: 100%; border: 1px solid #000 }
 <?php endif ?>
 <?php if ($page == Page::File): ?>
 	<h1>Files</h1>
-	<h2>Upload</h2>
+	<p>Upload new files.</p>
 	<form method=post enctype=multipart/form-data>
 		<input type=file name=files[] multiple required>
 		<input type=submit value=upload>
 	</form>
 	<h2>View and remove</h2>
-	<?php foreach ($data['files'] as $f): ?>
-		<h3><?=$f?></h3>
-		<?php if (in_array(pathinfo($f)['extension'], ['jpg', 'jpeg', 'gif', 'png'])): ?>
-			<a href=<?=$url_dpath.$f?>>
-				<img src=<?=$url_dpath.$f?> loading=lazy>
-			</a>
-		<?php endif ?>
-		<p><a href=<?=$url_dpath.$f?>><?=$url_dpath.$f?></a>
-		<?php if (isset($data['sets'][$f])): ?>
-			<?php foreach ($data['sets'][$f] as $s): ?>
-				<br><a href=<?=$url_dpath.$s?>><?=$url_dpath.$s?></a>
-			<?php endforeach ?>
-		<?php endif ?>
-		</p>
+	<?php foreach ($data as $f): ?>
+		<p><a href=<?=$url_dpath.$f?>>
+			<?php if (is_img($f)): ?>
+				<?=cmsix\img(DPATH.$f)?>
+			<?php endif ?>
+			<?=$url_dpath.$f?>
+		</a></p>
 	<?php endforeach ?>
 <?php endif ?>
 </body>
