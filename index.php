@@ -1,12 +1,32 @@
 <?php
+/**
+ * Administration panel for CMSIX CMS.
+ *
+ * You start at /login page that requires password to authorize.
+ * There is only one user so only password is needed, no usernames here.
+ * To setup password go to /hash page, provide password and submit.
+ * You will get values for PASS_HASH and PASS_SALT to paste in this file.
+ * Default values are few lines below, generated for password "12345".
+ * USING DEFAULT PASSWORD IS NOT RECOMMENDED!
+ *
+ * After setting password and authorization ou can get to main pages.
+ * Default /text page allowes to modify values in database text file.
+ * Page /file is used to upload, view and delete files.
+ * Uploaded images are resized to multiple sizes, defined in cmsix.php.
+ * To logout visit /logout page.
+ */
+
 require './cmsix.php';
 
-/* Password SALT and HASH can be generated on /hash page.
+/**#@+
+ * Password SALT and HASH can be generated on /hash page.
  * Salt is just a string with random characters.
  * Hash is value returned by password_hash(), salt + password.
  */
 const PASS_HASH = '$2y$10$sj7Q4h.T6iOlh1K24ZEOe.sytdfkUCgFt1n9/nxOLlxLpYeEXN9Gi';
 const PASS_SALT = 'batHMwtcn/HgAT86DpFvNjs5Zl57N0TMJ8K50B4TKdU=';
+
+/**#@-*/
 
 const S_KEY    = 'SID';                 // $_SESSION key
 const S_COOKIE = 'CMSIX_SID';           // Browser cookie name
@@ -23,50 +43,89 @@ enum Page {             // Each possible page, used to set $page var
 	case File;      // Page to view, add and remove files
 }
 
-$page;                  // Used to choice which page to render
-$data = [];             // Data required to render given page
-$msg  = [];             // Messages to show on page, if any
-
-$path_info = $_SERVER['PATH_INFO'] ?? '/';
-$url_root  = str_replace('index.php', '', $_SERVER['SCRIPT_NAME']);
-$url_dpath = $url_root.DPATH;
-
-/** Return true if $f file name has bitmap image extension. */
-function is_img(string $f): bool
+/** Return true if $file name has bitmap image extension. */
+function file_has_img_ext(string $file): bool
 {
-	$ext = pathinfo($f)['extension'] ?? '';
+	$ext = pathinfo($file)['extension'] ?? '';
 	return in_array($ext, ['jpg', 'jpeg', 'gif', 'png']);
 }
 
-/** Return true if given $f file is unsafe to upload and download. */
-function ignore_file(string $f): bool
+/** Return true if given $file name should be ignored. */
+function file_ignore(string $file): bool
 {
-	return str_starts_with($f, '.')       ||        // Is hidden
-	       str_ends_with($f, '.html')     ||        // Is HTML
-	       str_ends_with($f, '.php')      ||        // Is PHP
-	       str_contains($f, cmsix\PREFIX) ||        // Is internal
-	       is_dir($f);                              // Is dir
+	return str_starts_with($file, '.')       ||     // Is hidden
+	       str_ends_with($file, '.html')     ||     // Is HTML
+	       str_ends_with($file, '.php')      ||     // Is PHP
+	       str_contains($file, cmsix\PREFIX) ||     // Is internal
+	       is_dir($file);                           // Is dir
+}
+
+/** List all file names from $path dir. */
+function ls(string $path): array
+{
+	$file_names = [];
+	if (!($dir = opendir($path))) {
+		return $file_names;
+	}
+	while ($file_name = readdir($dir)) {
+		array_push($file_names, $file_name);
+	}
+	closedir($dir);
+	sort($file_names);
+	return $file_names;
+}
+
+/** Url path to root of admin page (this file). */
+$url_root = str_replace('index.php', '', $_SERVER['SCRIPT_NAME']);
+
+// TODO(irek): Handle errors by creating log files.
+// https://www.php.net/manual/en/errorfunc.examples.php
+// https://www.php.net/manual/en/errorfunc.constants.php
+/** Messages to show on page, if any. */
+$msg = isset($_GET['msg']) ? [$_GET['msg']] : [];
+
+/** Pages that require authorization. */
+$auth_pages = [Page::Text, Page::File];
+
+/** Page to handle and render, default to Page::Text. */
+$page = Page::Text;
+
+switch (preg_split('/[\/\?\#]/', $_SERVER['PATH_INFO'] ?? '/')[1]) {
+case 'hash'   : $page = Page::Hash   ; break;
+case 'login'  : $page = Page::Login  ; break;
+case 'logout' : $page = Page::Logout ; break;
+case 'file'   : $page = Page::File   ; break;
 }
 
 session_start();
 
-if (isset($_GET['msg'])) {              // Get page message from query
-	array_push($msg, $_GET['msg']);
+if (in_array($page, $auth_pages)) {             // Authorize
+	$session = $_SESSION[S_KEY]   ?? null;
+	$cookie  = $_COOKIE[S_COOKIE] ?? null;
+	// Redirect to login page if not authorized.
+	if (!$session or !$cookie or $session !== $cookie) {
+		header('Location: '.$url_root.'login?msg=Unauthorized!');
+		exit;                           // Unauthorized, redirect
+	}
+	// Refresh session cookie expire time.
+	setcookie(S_COOKIE, $cookie, [
+		'expires'  => time() + S_EXPIRY,
+		'samesite' => 'Strict',
+	]);                                     // Authorized
 }
-if (!isset($page) and str_starts_with($path_info, '/hash')) {
-	$page = Page::Hash;
-	if (isset($_GET['pass'])) {
+switch ($page) {
+case Page::Hash:
+	if (isset($_GET['pass'])) {             // Create hash & salt
 		$salt = base64_encode(random_bytes(32));
 		$hash = password_hash($salt.$_GET['pass'], PASSWORD_DEFAULT);
-		echo '<pre>';
+		header('Content-Type: text/plain; charset=utf-8');
+		echo "// Use in index.php:\n\n";
 		echo "const PASS_HASH = '{$hash}';\n";
 		echo "const PASS_SALT = '{$salt}';\n";
-		echo '</pre>';
-		exit(0);                // End here, else render page
-	}
-}
-if (!isset($page) and str_starts_with($path_info, '/login')) {
-	$page = Page::Login;
+		exit;                           // End here
+	}                                       // Else render page
+	break;
+case Page::Login:
 	if (isset($_POST['pass'])) {
 		if (password_verify(PASS_SALT.$_POST['pass'], PASS_HASH)) {
 			$session = uniqid();
@@ -75,35 +134,18 @@ if (!isset($page) and str_starts_with($path_info, '/login')) {
 				'expires'  => time() + S_EXPIRY,
 				'samesite' => 'Strict',
 			]);
-			header('Location: '.$url_root); // Redirect
-			exit;           // End here, successfull login
+			header('Location: '.$url_root);
+			exit;                           // Loged in
 		}
-		array_push($msg, 'Invalid password!');
+		array_push($msg, 'Invalid password!');  // Wrong pass
 	}
-}
-if (!isset($page) and str_starts_with($path_info, '/logout')) {
-	$page = Page::Logout;
-	$_SESSION[S_KEY] = null;                // Not necessary
-	setcookie(S_COOKIE, '', time()-1);      // Remove cookie
+	break;
+case Page::Logout:
+	$_SESSION[S_KEY] = null;                        // Unnecessary
+	setcookie(S_COOKIE, '', time()-1);              // Del cookie
 	session_destroy();
-	array_push($msg, "You have been loged out successfully.");
-}
-if (!isset($page)) {                            // Authorize next pages
-	$session = $_SESSION[S_KEY]   ?? null;
-	$cookie  = $_COOKIE[S_COOKIE] ?? null;
-	// Redirect to login page if not authorized.
-	if (!$session or !$cookie or $session !== $cookie) {
-		header('Location: '.$url_root.'login?msg=Unauthorized!');
-		exit;                   // End here if not authorized
-	}
-	// Refresh session cookie expire time.
-	setcookie(S_COOKIE, $cookie, [
-		'expires'  => time() + S_EXPIRY,
-		'samesite' => 'Strict',
-	]);
-}
-if (!isset($page) and str_starts_with($path_info, '/file')) {
-	$page = Page::File;
+	break;
+case Page::File:
 	if (!is_dir(DPATH) and !mkdir(DPATH)) {
 		array_push($msg, "ERROR: Can't make ".DPATH);
 		goto skip;
@@ -111,55 +153,100 @@ if (!isset($page) and str_starts_with($path_info, '/file')) {
 	if (isset($_FILES['files'])) {
 		$files = $_FILES['files'];
 		// $files = [
-		//     [name]      => [ 'img01.jpeg' , 'img02.jpeg' ]
-		//     [full_path] => [ 'img01.jpeg' , 'img02.jpeg' ]
-		//     [type]      => [ 'image/jpeg' , 'image/jpeg' ]
-		//     [tmp_name]  => [ '/tmp/php1L' , '/tmp/phpvX' ]
-		//     [error]     => [ 0            , 0            ]
-		//     [size]      => [ 308725       , 161037       ]
+		//   name      : ['img01.jpeg', 'img02.jpeg']
+		//   full_path : ['img01.jpeg', 'img02.jpeg']
+		//   type      : ['image/jpeg', 'image/jpeg']
+		//   tmp_name  : ['/tmp/php1L', '/tmp/phpvX']
+		//   error     : [0, 0]
+		//   size      : [308725, 161037]
 		// ]
 		// TODO(irek): Investigate size limits.
 		// TODO(irek): Check for errors in files.
-		// TODO(irek): There is no check if file already
-		// exists.  I want to give possiblity to overwrite
-		// existing files.  But this might not be the best
-		// way to do it.
-		// TODO(irek): Optimize image files.
+		// TODO(irek): There is no check if file already exists.  I want to give possiblity to overwrite existing files.  But this might not be the best way to do it.
 		$count = count($files['name']);
+		$imgs = [];             // Images to optimize
+		$img_supports = [];     // Types supported to optimise
+		if (extension_loaded('gd')) {
+			$info = gd_info();
+			if ($info['GIF Read Support'] && $info['GIF Create Support']) {
+				array_push($img_supports, 'image/gif');
+			} else {
+				array_push($msg, 'GIF optimisation is not supported');
+			}
+			if ($info['JPEG Support']) {
+				array_push($img_supports, 'image/jpeg');
+			} else {
+				array_push($msg, 'JPEG optimisation is not supported');
+			}
+			if ($info['PNG Support']) {
+				array_push($img_supports, 'image/png');
+			} else {
+				array_push($msg, 'PNG optimisation is not supported');
+			}
+			if ($info['WBMP Support']) {
+				array_push($img_supports, 'image/bmp');
+			} else {
+				array_push($msg, 'BMP optimisation is not supported');
+			}
+		} else {
+			array_push($msg, 'Image optimisation is not supported.');
+		}
 		for ($i = 0; $i < $count; $i++) {
 			$name = $files['name'][$i];
 			$ignored = [];
-			if (ignore_file($name)) {
+			if (file_ignore($name)) {
 			    	array_push($ignored, $name);
 				continue;
 			}
 			$src  = $files['tmp_name'][$i];
 			$dst  = DPATH.$name;
 			move_uploaded_file($src, $dst);
+			if (in_array($files['type'][$i], $img_supports)) {
+				array_push($imgs, $dst);
+			}
 		}
 		array_push($msg, 'Uploade complete.');
 		if (count($ignored)) {
-			array_push($msg, sprintf('<b>Ignored files: %s.</b><br>Files that starts with dot, ends with .html or .php, contains "%s" string, or are existing directories will be skipped.',
-			                         implode(', ', $ignored),
-						 cmsix\PREFIX));
+			array_push($msg, sprintf('<b>Ignored files: %s.</b><br>Files that starts with dot, ends with .html or .php, contains "%s" string, or are existing directories will be skipped.', implode(', ', $ignored), cmsix\PREFIX));
+		}
+		if (count($imgs)) {
+			array_push($msg, sprintf('Images to optimise: %s', implode(', ', $imgs)));
 		}
 	}
-	// This error should not be possible but let's handle it.
-	if (!($dir = opendir(DPATH))) {
-		array_push($msg, "ERROR: Can't open ".DPATH);
-		goto skip;
-	}
-	while ($f = readdir($dir)) {
-		if (ignore_file($f)) {
-			continue;
+	$data = ls(DPATH);
+	if (isset($_GET['delete']) and isset($_GET['files'])) {
+		$to_delete = [];
+		$ok  = [];
+		$err = [];
+		foreach ($_GET['files'] as $v) {
+			if (in_array($v, $data)) {
+				array_push($to_delete, $v);
+			}
+			foreach ($data as $file) {
+				if (str_starts_with($file, $v.cmsix\Prefix)) {
+					array_push($to_delete, $file);
+				}
+			}
 		}
-		array_push($data, $f);
+		foreach ($to_delete as $v) {
+			// TODO(irek): Handle PHP errors, hide them or use them for my own errors?
+			// https://www.php.net/manual/en/function.error-reporting.php
+			if (unlink(DPATH.$v)) {
+				array_push($ok, $v);
+			} else {
+				array_push($err, $v);
+			}
+		}
+		if (count($ok)) {
+			array_push($msg, 'Deleted files: '.implode(', ', $ok));
+		}
+		if (count($err)) {
+			array_push($msg, '<b>Failed to delete files:</b> '.implode(', ', $err));
+		}
 	}
-	closedir($dir);
-	sort($data);
-}
-if (!isset($page)) {                            // Default page
-	$page = Page::Text;
+	$data = array_filter($data, fn($v) => !file_ignore($v));
+	break;
+case Page::Text:
 	$data = cmsix\read(FPATH);
 	if (count($_POST)) {
 		foreach ($_POST as $k => $v) {
@@ -188,6 +275,7 @@ if (!isset($page)) {                            // Default page
 		fclose($file);
 		array_push($msg, "Texts have been updated.");
 	}
+	break;
 }
 skip:           // GOTO label to skip code in case of fatal error
                 // but you still want to show website with message.
@@ -223,7 +311,6 @@ body {
 }
 a { color: #012fe2 }
 a:hover { text-decoration: none }
-img { display: block; max-width: 100%; border: 1px solid #000 }
 .msg { padding: .5em 1em; outline: 1px solid }
 @media (prefers-color-scheme: dark) {
 	body { background-color: #000; color: #fff }
@@ -233,32 +320,7 @@ img { display: block; max-width: 100%; border: 1px solid #000 }
 <?php foreach ($msg as $m): ?>
 	<p class=msg><?=$m?></p>
 <?php endforeach ?>
-<?php // Render pages that DON'T REQUIRE authorization ------------ ?>
-<?php if ($page == Page::Hash): ?>
-	<h1>Hash</h1>
-	<p>Create password hash and salt.</p>
-	<form>
-		<input type=password name=pass placeholder=password required autofocus>
-		<input type=submit>
-	</form>
-<?php endif ?>
-<?php if ($page == Page::Login): ?>
-	<h1>Login</h1>
-	<p>Password should be given to you by website administrator.</p>
-	<form method=post>
-		<input type=password name=pass placeholder=password required autofocus>
-		<input type=submit value=login>
-	</form>
-<?php endif ?>
-<?php if ($page == Page::Logout): ?>
-	<h1>Logout</h1>
-	<ul>
-		<li><a href=/>home page</a></li>
-		<li><a href=<?=$url_root.'login'?>>login page</a></li>
-	</ul>
-<?php endif ?>
-<?php // Render pages that REQUIRE authorization ------------------ ?>
-<?php if (in_array($page, [Page::Text, Page::File])):   // Nav menu ?>
+<?php if (in_array($page, $auth_pages)):                // Nav menu ?>
 	<style>
 	menu {
 		list-style-type: none;
@@ -273,7 +335,32 @@ img { display: block; max-width: 100%; border: 1px solid #000 }
 		<li><a href=<?=$url_root.'logout'?>>logout</a>
 	</menu>
 <?php endif ?>
-<?php if ($page == Page::Text): ?>
+<?php switch($page): ?>
+<?php case Page::Hash: ?>
+	<h1>Hash</h1>
+	<p>Create hash and salt for given password. Use created values in <code>index.php</code>.</p>
+	<form>
+		<input type=password name=pass placeholder=password required autofocus>
+		<input type=submit>
+	</form>
+<?php break ?>
+<?php case Page::Login: ?>
+	<h1>Login</h1>
+	<p>Password should be given to you by website administrator.</p>
+	<form method=post>
+		<input type=password name=pass placeholder=password required autofocus>
+		<input type=submit value=login>
+	</form>
+<?php break ?>
+<?php case Page::Logout: ?>
+	<h1>Logout</h1>
+	<p>You have been loged out.</p>
+	<ul>
+		<li><a href=/>home page</a></li>
+		<li><a href=<?=$url_root.'login'?>>login page</a></li>
+	</ul>
+<?php break ?>
+<?php case Page::Text: ?>
 	<style>
 	textarea {
 		min-width: 100%;
@@ -297,8 +384,12 @@ img { display: block; max-width: 100%; border: 1px solid #000 }
 		<?php endforeach ?>
 		<p><input type=submit></p>
 	</form>
-<?php endif ?>
-<?php if ($page == Page::File): ?>
+<?php break ?>
+<?php case Page::File: ?>
+	<style>
+	img { display: block; max-width: 30%; border: 1px solid #000 }
+	li { margin-bottom: 2em }
+	</style>
 	<h1>Files</h1>
 	<p>Upload new files.</p>
 	<form method=post enctype=multipart/form-data>
@@ -306,14 +397,22 @@ img { display: block; max-width: 100%; border: 1px solid #000 }
 		<input type=submit value=upload>
 	</form>
 	<h2>View and remove</h2>
-	<?php foreach ($data as $f): ?>
-		<p><a href=<?=$url_dpath.$f?>>
-			<?php if (is_img($f)): ?>
-				<?=cmsix\img(DPATH.$f)?>
-			<?php endif ?>
-			<?=$url_dpath.$f?>
-		</a></p>
-	<?php endforeach ?>
-<?php endif ?>
+	<form>
+		<?php foreach ($data as $k => $f): ?>
+			<p>
+				<a href=<?=$url_root.DPATH.$f?>>
+					<?=$url_root.DPATH.$f?>
+					<?php if (file_has_img_ext($f)): ?>
+						<?=cmsix\img(DPATH.$f, [ "sizes" => "20vw" ])?>
+					<?php endif ?>
+				</a>
+				<label for=delete<?=$k?>>Delete</label>
+				<input id=delete<?=$k?> type=checkbox name=files[] value=<?=$f?> />
+			</p>
+		<?php endforeach ?>
+		<input type=submit name=delete value=delete />
+	</form>
+<?php break ?>
+<?php endswitch ?>
 </body>
 </html>
