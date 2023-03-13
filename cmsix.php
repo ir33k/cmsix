@@ -82,6 +82,8 @@ function img(string $src, ?array $attr = []): string
 	}
 	if (isset($attr['srcset'])) {           // Only when "srcset"
 		$attr['sizes'] ??= '100vw';     // Default "sizes"
+	} else {
+		unset($attr['sizes']);
 	}
 	return tag('img', null, $attr);
 }
