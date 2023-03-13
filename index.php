@@ -88,7 +88,9 @@ function file_add(array $files, string $path): array
 	// ]
 	// TODO(irek): Investigate size limits.
 	// TODO(irek): Check for errors in files.
-	// TODO(irek): There is no check if file already exists.  I want to give possiblity to overwrite existing files.  But this might not be the best way to do it.
+	// TODO(irek): There is no check if file already exists.
+	// I want to give possiblity to overwrite existing files.
+	// But this might not be the best way to do it.
 	$uploaded_file_paths = [];
 	$count = count($files['name']);
 	for ($i = 0; $i < $count; $i++) {
@@ -107,27 +109,34 @@ function file_add(array $files, string $path): array
 /** Optimaze images under $file_paths. */
 function file_img_optimize(array $file_paths): void
 {
+	// TODO(irek): It might be necessary to support other
+	// extension as fallback when GD is not loaded.
 	if (!extension_loaded('gd')) {
 		return;
 	}
-	$supported = [];                // Supported images
+	$supported_ext = [];
 	$info = gd_info();
-	if ($info['GIF Read Support'] && $info['GIF Create Support']) {
-		array_push($supported, 'image/gif');
-	}
+	// TODO(irek): Resizing GIFs while keeping the animation is a
+	// bit more involve.  Here is example of code that does that:
+	// https://www.phpclasses.org/package/7353-PHP-Resize-animations-in-files-of-the-GIF-format.html
+	// I will disable GIF support for now.  I'm not expectingn
+	// animated gifs in most of the cases anyway.
+	// if ($info['GIF Read Support'] && $info['GIF Create Support']) {
+	// 	array_push($supported_ext, 'gif');
+	// }
 	if ($info['JPEG Support']) {
-		array_push($supported, 'jpeg');
-		array_push($supported, 'jpg');
+		array_push($supported_ext, 'jpg');
+		array_push($supported_ext, 'jpeg');
 	}
 	if ($info['PNG Support']) {
-		array_push($supported, 'png');
+		array_push($supported_ext, 'png');
 	}
 	if ($info['WBMP Support']) {
-		array_push($supported, 'bmp');
+		array_push($supported_ext, 'bmp');
 	}
 	foreach ($file_paths as $v) {
 		$src_ext = pathinfo($v)['extension'];
-		if (!in_array($src_ext, $supported)) {
+		if (!in_array($src_ext, $supported_ext)) {
 			continue;
 		}
 		[$src_w, $src_h] = getimagesize($v);
