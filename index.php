@@ -11,7 +11,7 @@
  *
  * After setting password and authorization ou can get to main pages.
  * Default /text page allowes to modify values in database text file.
- * Page /file is used to upload, view and delete files.
+ * Page /file is used to upload, view and remove files.
  * Uploaded images are resized to multiple sizes, defined in cmsix.php.
  * To logout visit /logout page.
  */
@@ -38,30 +38,30 @@ enum Page {             // Each possible page, used to set $page var
 	case Hash;      // Page for creating password hash and salt
 	case Login;     // Login page, default when not authorized
 	case Logout;    // Upon visiting logout from active session
-	                // NEXT PAGES REQUIRE AUTHENTICATION
+			// NEXT PAGES REQUIRE AUTHENTICATION
 	case Text;      // Main page for editing values in DB file
 	case File;      // Page to view, add and remove files
 }
 
 /** Return true if $file name has bitmap image extension. */
-function file_has_img_ext(string $file): bool
+function file_is_img(string $file_name): bool
 {
-	$ext = pathinfo($file)['extension'] ?? '';
+	$ext = pathinfo($file_name)['extension'] ?? '';
 	return in_array($ext, ['jpg', 'jpeg', 'gif', 'png']);
 }
 
-/** Return true if given $file name should be ignored. */
-function file_ignore(string $file): bool
+/** Return true if given $file_name should be ignored. */
+function file_ignore(string $file_name): bool
 {
-	return str_starts_with($file, '.')       ||     // Is hidden
-	       str_ends_with($file, '.html')     ||     // Is HTML
-	       str_ends_with($file, '.php')      ||     // Is PHP
-	       str_contains($file, cmsix\PREFIX) ||     // Is internal
-	       is_dir($file);                           // Is dir
+	return str_starts_with($file_name, '.') ||
+	       str_ends_with($file_name, '.html') ||
+	       str_ends_with($file_name, '.php') ||
+	       str_contains($file_name, cmsix\PREFIX) ||
+	       is_dir($file_name);
 }
 
 /** List all file names from $path dir. */
-function ls(string $path): array
+function file_ls(string $path): array
 {
 	$file_names = [];
 	if (!($dir = opendir($path))) {
@@ -75,12 +75,130 @@ function ls(string $path): array
 	return $file_names;
 }
 
-/** Url path to root of admin page (this file). */
+/** Upload $files to dir $path. */
+function file_add(array $files, string $path): array
+{
+	// $files = [
+	//   name      : ['img01.jpeg', 'img02.jpeg']
+	//   full_path : ['img01.jpeg', 'img02.jpeg']
+	//   type      : ['image/jpeg', 'image/jpeg']
+	//   tmp_name  : ['/tmp/php1L', '/tmp/phpvX']
+	//   error     : [0, 0]
+	//   size      : [308725, 161037]
+	// ]
+	// TODO(irek): Investigate size limits.
+	// TODO(irek): Check for errors in files.
+	// TODO(irek): There is no check if file already exists.  I want to give possiblity to overwrite existing files.  But this might not be the best way to do it.
+	$uploaded_file_paths = [];
+	$count = count($files['name']);
+	for ($i = 0; $i < $count; $i++) {
+		$file_name = $files['name'][$i];
+		if (file_ignore($file_name)) {
+			continue;
+		}
+		$src = $files['tmp_name'][$i];
+		$dst = $path.$file_name;
+		move_uploaded_file($src, $dst);
+		array_push($uploaded_file_paths, $dst);
+	}
+	return $uploaded_file_paths;
+}
+
+/** Optimaze images under $file_paths. */
+function file_img_optimize(array $file_paths): void
+{
+	if (!extension_loaded('gd')) {
+		return;
+	}
+	$supported = [];                // Supported images
+	$info = gd_info();
+	if ($info['GIF Read Support'] && $info['GIF Create Support']) {
+		array_push($supported, 'image/gif');
+	}
+	if ($info['JPEG Support']) {
+		array_push($supported, 'jpeg');
+		array_push($supported, 'jpg');
+	}
+	if ($info['PNG Support']) {
+		array_push($supported, 'png');
+	}
+	if ($info['WBMP Support']) {
+		array_push($supported, 'bmp');
+	}
+	foreach ($file_paths as $v) {
+		$src_ext = pathinfo($v)['extension'];
+		if (!in_array($src_ext, $supported)) {
+			continue;
+		}
+		[$src_w, $src_h] = getimagesize($v);
+		$src_img;
+		switch ($src_ext) {
+		case 'bmp'  : $src_img = imagecreatefrombmp  ($v); break;
+		case 'jpg'  :
+		case 'jpeg' : $src_img = imagecreatefromjpeg ($v); break;
+		case 'png'  : $src_img = imagecreatefrompng  ($v); break;
+		case 'gif'  : $src_img = imagecreatefromgif  ($v); break;
+		}
+		if (!$src_img) {
+			continue;
+		}
+		foreach (cmsix\SIZES as $dst_w) {
+			if ($src_w < $dst_w) {
+				continue;
+			}
+			$dst_h = floor($src_h * ($dst_w / $src_w));
+			$dst_img = imagecreatetruecolor($dst_w, $dst_h);
+			imagecopyresampled($dst_img, $src_img, 0, 0, 0, 0, $dst_w, $dst_h, $src_w, $src_h);
+			$dst_path = $v.cmsix\PREFIX.$dst_w;
+			if ($src_ext) {
+				$dst_path .= ".{$src_ext}";
+			}
+			switch ($src_ext) {
+			case 'bmp'  : imagebmp  ($dst_img, $dst_path); break;
+			case 'jpg'  :
+			case 'jpeg' : imagejpeg ($dst_img, $dst_path); break;
+			case 'png'  : imagepng  ($dst_img, $dst_path); break;
+			case 'gif'  : imagegif  ($dst_img, $dst_path); break;
+			}
+			imagedestroy($dst_img);
+		}
+		imagedestroy($src_img);
+	}
+}
+
+/** Remove $file_names from dir $path along with internal CMSIX files. */
+function file_rm(array $file_names, string $path): void
+{
+	$to_remove = [];
+	if (!($dir = opendir($path))) {
+		return;
+	}
+	while ($file_name = readdir($dir)) {
+		foreach ($file_names as $v) {
+			if ($file_name == $v || str_starts_with($file_name, $v.cmsix\PREFIX)) {
+				array_push($to_remove, $file_name);
+			}
+		}
+	}
+	closedir($dir);
+	foreach ($to_remove as $v) {
+		// TODO(irek): Handle PHP errors, hide them or use them for my own errors?
+		// https://www.php.net/manual/en/function.error-reporting.php
+		unlink(DPATH.$v);
+	}
+}
+
+/** Url path to root of admin page (to this file). */
 $url_root = str_replace('index.php', '', $_SERVER['SCRIPT_NAME']);
 
-// TODO(irek): Handle errors by creating log files.
+// TODO(irek): Handle errors by creating log files.  Currently a lot
+// of functions, especially the file related function, are very silent
+// about errors making it very script like experience.  I would like
+// to log all errors and warnings and display them to the user.
+//
 // https://www.php.net/manual/en/errorfunc.examples.php
 // https://www.php.net/manual/en/errorfunc.constants.php
+//
 /** Messages to show on page, if any. */
 $msg = isset($_GET['msg']) ? [$_GET['msg']] : [];
 
@@ -146,104 +264,19 @@ case Page::Logout:
 	session_destroy();
 	break;
 case Page::File:
+	// Check if our directory with files can be used.
 	if (!is_dir(DPATH) and !mkdir(DPATH)) {
-		array_push($msg, "ERROR: Can't make ".DPATH);
-		goto skip;
+		array_push($msg, "ERROR: Can't open and make ".DPATH);
+		goto skip;                              // Fatal error
 	}
 	if (isset($_FILES['files'])) {
-		$files = $_FILES['files'];
-		// $files = [
-		//   name      : ['img01.jpeg', 'img02.jpeg']
-		//   full_path : ['img01.jpeg', 'img02.jpeg']
-		//   type      : ['image/jpeg', 'image/jpeg']
-		//   tmp_name  : ['/tmp/php1L', '/tmp/phpvX']
-		//   error     : [0, 0]
-		//   size      : [308725, 161037]
-		// ]
-		// TODO(irek): Investigate size limits.
-		// TODO(irek): Check for errors in files.
-		// TODO(irek): There is no check if file already exists.  I want to give possiblity to overwrite existing files.  But this might not be the best way to do it.
-		$count = count($files['name']);
-		$imgs = [];             // Images to optimize
-		$img_supports = [];     // Types supported to optimise
-		if (extension_loaded('gd')) {
-			$info = gd_info();
-			if ($info['GIF Read Support'] && $info['GIF Create Support']) {
-				array_push($img_supports, 'image/gif');
-			} else {
-				array_push($msg, 'GIF optimisation is not supported');
-			}
-			if ($info['JPEG Support']) {
-				array_push($img_supports, 'image/jpeg');
-			} else {
-				array_push($msg, 'JPEG optimisation is not supported');
-			}
-			if ($info['PNG Support']) {
-				array_push($img_supports, 'image/png');
-			} else {
-				array_push($msg, 'PNG optimisation is not supported');
-			}
-			if ($info['WBMP Support']) {
-				array_push($img_supports, 'image/bmp');
-			} else {
-				array_push($msg, 'BMP optimisation is not supported');
-			}
-		} else {
-			array_push($msg, 'Image optimisation is not supported.');
-		}
-		for ($i = 0; $i < $count; $i++) {
-			$name = $files['name'][$i];
-			$ignored = [];
-			if (file_ignore($name)) {
-			    	array_push($ignored, $name);
-				continue;
-			}
-			$src  = $files['tmp_name'][$i];
-			$dst  = DPATH.$name;
-			move_uploaded_file($src, $dst);
-			if (in_array($files['type'][$i], $img_supports)) {
-				array_push($imgs, $dst);
-			}
-		}
-		array_push($msg, 'Uploade complete.');
-		if (count($ignored)) {
-			array_push($msg, sprintf('<b>Ignored files: %s.</b><br>Files that starts with dot, ends with .html or .php, contains "%s" string, or are existing directories will be skipped.', implode(', ', $ignored), cmsix\PREFIX));
-		}
-		if (count($imgs)) {
-			array_push($msg, sprintf('Images to optimise: %s', implode(', ', $imgs)));
-		}
+		$uploaded_file_paths = file_add($_FILES['files'], DPATH);
+		file_img_optimize($uploaded_file_paths);
 	}
-	$data = ls(DPATH);
-	if (isset($_GET['delete']) and isset($_GET['files'])) {
-		$to_delete = [];
-		$ok  = [];
-		$err = [];
-		foreach ($_GET['files'] as $v) {
-			if (in_array($v, $data)) {
-				array_push($to_delete, $v);
-			}
-			foreach ($data as $file) {
-				if (str_starts_with($file, $v.cmsix\Prefix)) {
-					array_push($to_delete, $file);
-				}
-			}
-		}
-		foreach ($to_delete as $v) {
-			// TODO(irek): Handle PHP errors, hide them or use them for my own errors?
-			// https://www.php.net/manual/en/function.error-reporting.php
-			if (unlink(DPATH.$v)) {
-				array_push($ok, $v);
-			} else {
-				array_push($err, $v);
-			}
-		}
-		if (count($ok)) {
-			array_push($msg, 'Deleted files: '.implode(', ', $ok));
-		}
-		if (count($err)) {
-			array_push($msg, '<b>Failed to delete files:</b> '.implode(', ', $err));
-		}
+	if (isset($_GET['remove']) and isset($_GET['files'])) {
+		file_rm($_GET['files'], DPATH);
 	}
+	$data = file_ls(DPATH);
 	$data = array_filter($data, fn($v) => !file_ignore($v));
 	break;
 case Page::Text:
@@ -278,7 +311,7 @@ case Page::Text:
 	break;
 }
 skip:           // GOTO label to skip code in case of fatal error
-                // but you still want to show website with message.
+		// but you still want to show website with message.
 ?>
 <!DOCTYPE html>
 <html lang=en>
@@ -402,15 +435,15 @@ a:hover { text-decoration: none }
 			<p>
 				<a href=<?=$url_root.DPATH.$f?>>
 					<?=$url_root.DPATH.$f?>
-					<?php if (file_has_img_ext($f)): ?>
+					<?php if (file_is_img($f)): ?>
 						<?=cmsix\img(DPATH.$f, [ "sizes" => "20vw" ])?>
 					<?php endif ?>
 				</a>
-				<label for=delete<?=$k?>>Delete</label>
-				<input id=delete<?=$k?> type=checkbox name=files[] value=<?=$f?> />
+				<label for=remove<?=$k?>>Remove</label>
+				<input id=remove<?=$k?> type=checkbox name=files[] value=<?=$f?> />
 			</p>
 		<?php endforeach ?>
-		<input type=submit name=delete value=delete />
+		<input type=submit name=remove value=remove />
 	</form>
 <?php break ?>
 <?php endswitch ?>
