@@ -38,9 +38,78 @@ enum Page {             // Each possible page, used to set $page var
 	case Hash;      // Page for creating password hash and salt
 	case Login;     // Login page, default when not authorized
 	case Logout;    // Upon visiting logout from active session
-			// NEXT PAGES REQUIRE AUTHENTICATION
+	                // NEXT PAGES REQUIRE AUTHENTICATION
 	case Text;      // Main page for editing values in DB file
 	case File;      // Page to view, add and remove files
+}
+
+/** Replace database text file with content of $data. */
+function text_write(array $data): void
+{
+	if (!is_resource($file = fopen(FPATH, 'wb'))) {
+		return;
+	}
+	foreach ($data as $k => $v) {
+		fwrite($file, $k);
+		$v = str_replace('', '', $v);
+		$v = rtrim($v)."\n";
+		// Append END indicator.  Default is single empty line
+		// but if $v value contains empty lines then generate
+		// unique id to mark end.
+		if (str_contains($v, "\n\n")) {
+			$id = "END-".uniqid();
+			fwrite($file, "\t{$id}");
+			$v .= "{$id}\n";
+		}
+		fwrite($file, "\n{$v}\n");
+	}
+	fclose($file);
+}
+
+/** Update database text file with changes in $new_data. */
+function text_update(array $new_data): void
+{
+	$data = cmsix\read(FPATH);
+	$write = false;
+	foreach($new_data as $k => $v) {
+		if (isset($data[$k]) and
+		    strlen(trim($k)) and
+		    strlen(trim($v))) {
+			$data[$k] = $v;
+			$write = true;
+		}
+	}
+	if ($write) {
+		text_write($data);
+	}
+}
+
+/** Add new text with $key of $value to database text file. */
+function text_add(string $key, string $value): void
+{
+	if (strlen(trim($key)) and
+	    strlen(trim($value) and
+	    !isset($date[$key]))) {
+		$data = cmsix\read(FPATH);
+		$data[$key] = $value;
+		text_write($data);
+	}
+}
+
+/** Remove $keys with their values from database text file. */
+function text_rm(array $keys): void
+{
+	$data = cmsix\read(FPATH);
+	$write = false;
+	foreach($keys as $k) {
+		if (isset($data[$k])) {
+			unset($data[$k]);
+			$write = true;
+		}
+	}
+	if ($write) {
+		text_write($data);
+	}
 }
 
 /** Return true if $file name has bitmap image extension. */
@@ -75,7 +144,7 @@ function file_ls(string $path): array
 	return $file_names;
 }
 
-/** Upload $files to dir $path. */
+/** Upload $files to dir $path.  Return paths to uploaded files. */
 function file_add(array $files, string $path): array
 {
 	// $files = [
@@ -134,19 +203,19 @@ function file_img_optimize(array $file_paths): void
 	if ($info['WBMP Support']) {
 		array_push($supported_ext, 'bmp');
 	}
-	foreach ($file_paths as $v) {
-		$src_ext = pathinfo($v)['extension'];
+	foreach ($file_paths as $src_path) {
+		$src_ext = pathinfo($src_path)['extension'];
 		if (!in_array($src_ext, $supported_ext)) {
 			continue;
 		}
-		[$src_w, $src_h] = getimagesize($v);
+		[$src_w, $src_h] = getimagesize($src_path);
 		$src_img;
 		switch ($src_ext) {
-		case 'bmp'  : $src_img = imagecreatefrombmp  ($v); break;
+		case 'bmp'  : $src_img = imagecreatefrombmp  ($src_path); break;
 		case 'jpg'  :
-		case 'jpeg' : $src_img = imagecreatefromjpeg ($v); break;
-		case 'png'  : $src_img = imagecreatefrompng  ($v); break;
-		case 'gif'  : $src_img = imagecreatefromgif  ($v); break;
+		case 'jpeg' : $src_img = imagecreatefromjpeg ($src_path); break;
+		case 'png'  : $src_img = imagecreatefrompng  ($src_path); break;
+		case 'gif'  : $src_img = imagecreatefromgif  ($src_path); break;
 		}
 		if (!$src_img) {
 			continue;
@@ -158,7 +227,7 @@ function file_img_optimize(array $file_paths): void
 			$dst_h = floor($src_h * ($dst_w / $src_w));
 			$dst_img = imagecreatetruecolor($dst_w, $dst_h);
 			imagecopyresampled($dst_img, $src_img, 0, 0, 0, 0, $dst_w, $dst_h, $src_w, $src_h);
-			$dst_path = $v.cmsix\PREFIX.$dst_w;
+			$dst_path = $src_path.cmsix\PREFIX.$dst_w;
 			if ($src_ext) {
 				$dst_path .= ".{$src_ext}";
 			}
@@ -184,7 +253,8 @@ function file_rm(array $file_names, string $path): void
 	}
 	while ($file_name = readdir($dir)) {
 		foreach ($file_names as $v) {
-			if ($file_name == $v || str_starts_with($file_name, $v.cmsix\PREFIX)) {
+			if ($file_name == $v or
+			    str_starts_with($file_name, $v.cmsix\PREFIX)) {
 				array_push($to_remove, $file_name);
 			}
 		}
@@ -273,7 +343,9 @@ case Page::Logout:
 	session_destroy();
 	break;
 case Page::File:
+	$data = [];
 	// Check if our directory with files can be used.
+	// Otherwise it makes no sense to do anything on files page.
 	if (!is_dir(DPATH) and !mkdir(DPATH)) {
 		array_push($msg, "ERROR: Can't open and make ".DPATH);
 		goto skip;                              // Fatal error
@@ -282,45 +354,36 @@ case Page::File:
 		$uploaded_file_paths = file_add($_FILES['files'], DPATH);
 		file_img_optimize($uploaded_file_paths);
 	}
-	if (isset($_GET['remove']) and isset($_GET['files'])) {
+	if (isset($_GET['remove']) and
+	    isset($_GET['files'])) {
 		file_rm($_GET['files'], DPATH);
 	}
 	$data = file_ls(DPATH);
 	$data = array_filter($data, fn($v) => !file_ignore($v));
 	break;
 case Page::Text:
-	$data = cmsix\read(FPATH);
-	if (count($_POST)) {
-		foreach ($_POST as $k => $v) {
-			if (isset($data[$k])) {
-				$data[$k] = $v;
-			}
-		}
-		if (!is_resource($file = fopen(FPATH, 'wb'))) {
-			array_push($msg, "ERROR: Can't open ".FPATH);
-			goto skip;
-		}
-		foreach ($data as $k => $v) {
-			fwrite($file, $k);
-			$v = str_replace('', '', $v);
-			$v = rtrim($v) . "\n";
-			// Append END indicator.  Default is single
-			// empty line but if $v value contains empty
-			// lines then generate unique id to mark end.
-			if (str_contains($v, "\n\n")) {
-				$id = "END-".uniqid();
-				fwrite($file, "\t".$id);
-				$v .= $id."\n";
-			}
-			fwrite($file, "\n".$v."\n");
-		}
-		fclose($file);
-		array_push($msg, "Texts have been updated.");
+	$data = [];
+	if (!is_resource(fopen(FPATH, 'rb'))) {
+		array_push($msg, "ERROR: Can't open ".FPATH);
+		goto skip;                              // Fatal error
 	}
+	if (count($_POST)) {
+		text_update($_POST);
+	}
+	if (isset($_GET['add']) and
+	    isset($_GET['key']) and
+	    isset($_GET['value'])) {
+		text_add($_GET['key'], $_GET['value']);
+	}
+	if (isset($_GET['remove']) and
+	    isset($_GET['keys'])) {
+		text_rm($_GET['keys']);
+	}
+	$data = cmsix\read(FPATH);
 	break;
 }
 skip:           // GOTO label to skip code in case of fatal error
-		// but you still want to show website with message.
+                // but you still want to show website with message.
 ?>
 <!DOCTYPE html>
 <html lang=en>
@@ -404,7 +467,7 @@ a:hover { text-decoration: none }
 <?php break ?>
 <?php case Page::Text: ?>
 	<style>
-	textarea {
+	input[type=text], textarea {
 		min-width: 100%;
 		max-width: 100%;
 		box-sizing: border-box;
@@ -418,7 +481,13 @@ a:hover { text-decoration: none }
 	}
 	</style>
 	<h1>Texts</h1>
-	<p>Modify at least one field and submit to make a change.</p>
+	<h2>Add new value</h2>
+		<form>
+			<input type=text name=key placeholder=key required />
+			<textarea cols=80 rows=5 name=value placeholder=value required></textarea>
+			<input type=submit name=add value=add />
+		</form>
+	<h2>Modify existing values</h2>
 	<form method=post>
 		<?php foreach ($data as $k => $v): ?>
 			<h3 id=<?=$k?>><code><?=$k?></code></h3>
