@@ -482,11 +482,20 @@ a:hover { text-decoration: none }
 	</style>
 	<h1>Texts</h1>
 	<h2>Add new value</h2>
-		<form>
-			<input type=text name=key placeholder=key required />
-			<textarea cols=80 rows=5 name=value placeholder=value required></textarea>
-			<input type=submit name=add value=add />
-		</form>
+	<form>
+		<input type=text name=key placeholder=key required />
+		<textarea cols=80 rows=5 name=value placeholder=value required></textarea>
+		<input type=submit name=add value=add />
+	</form>
+	<h2>Remove</h2>
+	<form>
+		<select name=keys[] multiple required>
+			<?php foreach ($data as $k => $v): ?>
+				<option value=<?=$k?>><?=$k?></option>
+			<?php endforeach ?>
+		</select>
+		<input type=submit name=remove value=remove />
+	</form>
 	<h2>Modify existing values</h2>
 	<form method=post>
 		<?php foreach ($data as $k => $v): ?>
@@ -502,7 +511,7 @@ a:hover { text-decoration: none }
 	li { margin-bottom: 2em }
 	</style>
 	<h1>Files</h1>
-	<p>Upload new files.</p>
+	<h2>Upload</h2>
 	<form method=post enctype=multipart/form-data>
 		<input type=file name=files[] multiple required>
 		<input type=submit value=upload>
