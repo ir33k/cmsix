@@ -1,4 +1,5 @@
 <?php
+// TODO(irek): Warning: POST Content-Length of 11879652 bytes exceeds the limit of 8388608 bytes in Unknown on line 0
 /**
  * Administration panel for CMSIX CMS.
  *
@@ -185,14 +186,6 @@ function file_img_optimize(array $file_paths): void
 	}
 	$supported_ext = [];
 	$info = gd_info();
-	// TODO(irek): Resizing GIFs while keeping the animation is a
-	// bit more involve.  Here is example of code that does that:
-	// https://www.phpclasses.org/package/7353-PHP-Resize-animations-in-files-of-the-GIF-format.html
-	// I will disable GIF support for now.  I'm not expectingn
-	// animated gifs in most of the cases anyway.
-	// if ($info['GIF Read Support'] && $info['GIF Create Support']) {
-	// 	array_push($supported_ext, 'gif');
-	// }
 	if ($info['JPEG Support']) {
 		array_push($supported_ext, 'jpg');
 		array_push($supported_ext, 'jpeg');
@@ -236,7 +229,6 @@ function file_img_optimize(array $file_paths): void
 			case 'jpg'  :
 			case 'jpeg' : imagejpeg ($dst_img, $dst_path); break;
 			case 'png'  : imagepng  ($dst_img, $dst_path); break;
-			case 'gif'  : imagegif  ($dst_img, $dst_path); break;
 			}
 			imagedestroy($dst_img);
 		}
