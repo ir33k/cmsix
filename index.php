@@ -479,23 +479,19 @@ a:hover { text-decoration: none }
 		<textarea cols=80 rows=5 name=value placeholder=value required></textarea>
 		<input type=submit name=add value=add />
 	</form>
-	<h2>Remove</h2>
-	<form>
-		<select name=keys[] multiple required>
-			<?php foreach ($data as $k => $v): ?>
-				<option value=<?=$k?>><?=$k?></option>
-			<?php endforeach ?>
-		</select>
-		<input type=submit name=remove value=remove />
-	</form>
-	<h2>Modify existing values</h2>
-	<form method=post>
-		<?php foreach ($data as $k => $v): ?>
-			<h3 id=<?=$k?>><code><?=$k?></code></h3>
-			<textarea cols=80 rows=<?=substr_count($v,"\n")+1?> name=<?=$k?>><?=$v?></textarea>
-		<?php endforeach ?>
-		<p><input type=submit></p>
-	</form>
+	<h2>Modify or remove existing values</h2>
+	<form id=text-edit method=post></form>
+	<form id=text-remove method=get></form>
+	<?php foreach ($data as $k => $v): ?>
+		<h3 id=<?=$k?>><code><?=$k?></code></h3>
+		<textarea form=text-edit cols=80 rows=<?=substr_count($v,"\n")+1?> name=<?=$k?>><?=$v?></textarea>
+		<label for="remove-<?=$k?>">Remove</label>
+		<input form=text-remove id="remove-<?=$k?>" type=checkbox name=keys[] value="<?=$k?>">
+	<?php endforeach ?>
+	<p>
+		<input form=text-remove name=remove type=submit value=remove>
+		<input form=text-edit type=submit value=edit>
+	</p>
 <?php break ?>
 <?php case Page::File: ?>
 	<style>
