@@ -208,7 +208,6 @@ function file_img_optimize(array $file_paths): void
 		case 'jpg'  :
 		case 'jpeg' : $src_img = imagecreatefromjpeg ($src_path); break;
 		case 'png'  : $src_img = imagecreatefrompng  ($src_path); break;
-		case 'gif'  : $src_img = imagecreatefromgif  ($src_path); break;
 		}
 		if (!$src_img) {
 			continue;
