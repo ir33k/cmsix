@@ -1,5 +1,4 @@
 <?php
-// TODO(irek): Warning: POST Content-Length of 11879652 bytes exceeds the limit of 8388608 bytes in Unknown on line 0
 /**
  * Administration panel for CMSIX CMS.
  *
@@ -32,8 +31,6 @@ const PASS_SALT = 'batHMwtcn/HgAT86DpFvNjs5Zl57N0TMJ8K50B4TKdU=';
 const S_KEY    = 'SID';                 // $_SESSION key
 const S_COOKIE = 'CMSIX_SID';           // Browser cookie name
 const S_EXPIRY = 60*60;                 // 60m, cookie expire time
-const FPATH    = cmsix\FPATH;           // Path to file with data
-const DPATH    = 'db/';                 // Path to files dir
 
 enum Page {             // Each possible page, used to set $page var
 	case Hash;      // Page for creating password hash and salt
@@ -47,22 +44,22 @@ enum Page {             // Each possible page, used to set $page var
 /** Replace database text file with content of $data. */
 function text_write(array $data): void
 {
-	if (!is_resource($file = fopen(FPATH, 'wb'))) {
+	if (!is_resource($file = fopen(CMSIX_PATH_TEXT, 'wb'))) {
 		return;
 	}
 	foreach ($data as $k => $v) {
-		fwrite($file, $k);
-		$v = str_replace('', '', $v);
-		$v = rtrim($v)."\n";
-		// Append END indicator.  Default is single empty line
-		// but if $v value contains empty lines then generate
-		// unique id to mark end.
-		if (str_contains($v, "\n\n")) {
-			$id = "END-".uniqid();
-			fwrite($file, "\t{$id}");
-			$v .= "{$id}\n";
-		}
-		fwrite($file, "\n{$v}\n");
+		// Just in case replace all instances of CMSIX_TEXT_SEPARATOR.
+		$v = preg_replace(
+			'/^'.CMSIX_TEXT_SEPARATOR.'.*/',
+			'==================================================',
+			$v
+		);
+		fwrite($file, sprintf(
+			"%s\n%s\n%s\n\n",
+			CMSIX_TEXT_SEPARATOR,
+			$k,
+			rtrim(str_replace('', '', $v))
+		));
 	}
 	fclose($file);
 }
@@ -70,7 +67,7 @@ function text_write(array $data): void
 /** Update database text file with changes in $new_data. */
 function text_update(array $new_data): void
 {
-	$data = cmsix\read(FPATH);
+	$data = cmsix_read();
 	$write = false;
 	foreach($new_data as $k => $v) {
 		if (isset($data[$k]) and
@@ -91,7 +88,7 @@ function text_add(string $key, string $value): void
 	if (strlen(trim($key)) and
 	    strlen(trim($value) and
 	    !isset($date[$key]))) {
-		$data = cmsix\read(FPATH);
+		$data = cmsix_read();
 		$data[$key] = $value;
 		text_write($data);
 	}
@@ -100,7 +97,7 @@ function text_add(string $key, string $value): void
 /** Remove $keys with their values from database text file. */
 function text_rm(array $keys): void
 {
-	$data = cmsix\read(FPATH);
+	$data = cmsix_read();
 	$write = false;
 	foreach($keys as $k) {
 		if (isset($data[$k])) {
@@ -126,15 +123,15 @@ function file_ignore(string $file_name): bool
 	return str_starts_with($file_name, '.') ||
 	       str_ends_with($file_name, '.html') ||
 	       str_ends_with($file_name, '.php') ||
-	       str_contains($file_name, cmsix\PREFIX) ||
+	       str_contains($file_name, CMSIX_FILE_PREFIX) ||
 	       is_dir($file_name);
 }
 
 /** List all file names from $path dir. */
-function file_ls(string $path): array
+function file_ls(): array
 {
 	$file_names = [];
-	if (!($dir = opendir($path))) {
+	if (!($dir = opendir(CMSIX_PATH_FILE))) {
 		return $file_names;
 	}
 	while ($file_name = readdir($dir)) {
@@ -145,42 +142,50 @@ function file_ls(string $path): array
 	return $file_names;
 }
 
-/** Upload $files to dir $path.  Return paths to uploaded files. */
-function file_add(array $files, string $path): array
+// TODO(irek): Make it better.
+// See first comment on: https://www.php.net/manual/en/features.file-upload.php
+/** Upload $files.  Return paths to uploaded files. */
+function file_add(array $files): array
 {
-	// $files = [
-	//   name      : ['img01.jpeg', 'img02.jpeg']
-	//   full_path : ['img01.jpeg', 'img02.jpeg']
-	//   type      : ['image/jpeg', 'image/jpeg']
-	//   tmp_name  : ['/tmp/php1L', '/tmp/phpvX']
-	//   error     : [0, 0]
-	//   size      : [308725, 161037]
-	// ]
-	// TODO(irek): Investigate size limits.
-	// TODO(irek): Check for errors in files.
-	// TODO(irek): There is no check if file already exists.
-	// I want to give possiblity to overwrite existing files.
-	// But this might not be the best way to do it.
+	// Check for $_FILES Corruption Attack.
+	if (!isset($files['error']) ||
+	    !is_array($files['error'])) {
+		throw new RuntimeException('Invalid parameters.');
+	}
 	$uploaded_file_paths = [];
 	$count = count($files['name']);
 	for ($i = 0; $i < $count; $i++) {
+		switch ($files['error'][$i]) {
+		case UPLOAD_ERR_OK:
+			break;
+		case UPLOAD_ERR_NO_FILE:
+		case UPLOAD_ERR_INI_SIZE:
+			// TODO(irek): I need to handle that.
+		case UPLOAD_ERR_FORM_SIZE:
+		default:
+			// TODO(irek): I rly need to handle errors.
+			// throw new RuntimeException('Unknown errors.');
+			continue 2;               // Skip file with error
+		}
 		$file_name = $files['name'][$i];
 		if (file_ignore($file_name)) {
 			continue;
 		}
 		$src = $files['tmp_name'][$i];
-		$dst = $path.$file_name;
+		$dst = CMSIX_PATH_FILE.$file_name;
 		move_uploaded_file($src, $dst);
 		array_push($uploaded_file_paths, $dst);
 	}
 	return $uploaded_file_paths;
 }
 
-/** Optimaze images under $file_paths. */
+/** Optimaze images. */
 function file_img_optimize(array $file_paths): void
 {
-	// TODO(irek): It might be necessary to support other
-	// extension as fallback when GD is not loaded.
+	// TODO(irek): Enable progression in JPG and PNG images.
+	// TODO(irek): It might be necessary to support other extension.
+	// As fallback when GD is not loaded.
+	// Also error/warning message would be nice. 
 	if (!extension_loaded('gd')) {
 		return;
 	}
@@ -196,6 +201,9 @@ function file_img_optimize(array $file_paths): void
 	if ($info['WBMP Support']) {
 		array_push($supported_ext, 'bmp');
 	}
+	// TODO(irek): Looks like it will be necessary to support GIFs.
+	// But not just any support but support with optimizations.
+	// This will require a lot of code.
 	foreach ($file_paths as $src_path) {
 		$src_ext = pathinfo($src_path)['extension'];
 		if (!in_array($src_ext, $supported_ext)) {
@@ -212,14 +220,14 @@ function file_img_optimize(array $file_paths): void
 		if (!$src_img) {
 			continue;
 		}
-		foreach (cmsix\SIZES as $dst_w) {
+		foreach (CMSIX_SIZES as $dst_w) {
 			if ($src_w < $dst_w) {
 				continue;
 			}
 			$dst_h = floor($src_h * ($dst_w / $src_w));
 			$dst_img = imagecreatetruecolor($dst_w, $dst_h);
 			imagecopyresampled($dst_img, $src_img, 0, 0, 0, 0, $dst_w, $dst_h, $src_w, $src_h);
-			$dst_path = $src_path.cmsix\PREFIX.$dst_w;
+			$dst_path = $src_path.CMSIX_FILE_PREFIX.$dst_w;
 			if ($src_ext) {
 				$dst_path .= ".{$src_ext}";
 			}
@@ -235,17 +243,17 @@ function file_img_optimize(array $file_paths): void
 	}
 }
 
-/** Remove $file_names from dir $path along with internal CMSIX files. */
-function file_rm(array $file_names, string $path): void
+/** Remove $file_names along with internal CMSIX files. */
+function file_rm(array $file_names): void
 {
 	$to_remove = [];
-	if (!($dir = opendir($path))) {
+	if (!($dir = opendir(CMSIX_PATH_FILE))) {
 		return;
 	}
 	while ($file_name = readdir($dir)) {
 		foreach ($file_names as $v) {
 			if ($file_name == $v or
-			    str_starts_with($file_name, $v.cmsix\PREFIX)) {
+			    str_starts_with($file_name, $v.CMSIX_FILE_PREFIX)) {
 				array_push($to_remove, $file_name);
 			}
 		}
@@ -254,12 +262,9 @@ function file_rm(array $file_names, string $path): void
 	foreach ($to_remove as $v) {
 		// TODO(irek): Handle PHP errors, hide them or use them for my own errors?
 		// https://www.php.net/manual/en/function.error-reporting.php
-		unlink(DPATH.$v);
+		unlink(CMSIX_PATH_FILE.$v);
 	}
 }
-
-/** Url path to root of admin page (to this file). */
-$url_root = str_replace('index.php', '', $_SERVER['SCRIPT_NAME']);
 
 // TODO(irek): Handle errors by creating log files.  Currently a lot
 // of functions, especially the file related function, are very silent
@@ -292,7 +297,7 @@ if (in_array($page, $auth_pages)) {             // Authorize
 	$cookie  = $_COOKIE[S_COOKIE] ?? null;
 	// Redirect to login page if not authorized.
 	if (!$session or !$cookie or $session !== $cookie) {
-		header('Location: '.$url_root.'login?msg=Unauthorized!');
+		header('Location: '.CMSIX_URL_ROOT.'/login?msg=Unauthorized!');
 		exit;                           // Unauthorized, redirect
 	}
 	// Refresh session cookie expire time.
@@ -322,7 +327,7 @@ case Page::Login:
 				'expires'  => time() + S_EXPIRY,
 				'samesite' => 'Strict',
 			]);
-			header('Location: '.$url_root);
+			header('Location: '.CMSIX_URL_ROOT);
 			exit;                           // Loged in
 		}
 		array_push($msg, 'Invalid password!');  // Wrong pass
@@ -337,25 +342,25 @@ case Page::File:
 	$data = [];
 	// Check if our directory with files can be used.
 	// Otherwise it makes no sense to do anything on files page.
-	if (!is_dir(DPATH) and !mkdir(DPATH)) {
-		array_push($msg, "ERROR: Can't open and make ".DPATH);
+	if (!is_dir(CMSIX_PATH_FILE) and !mkdir(CMSIX_PATH_FILE)) {
+		array_push($msg, "ERROR: Can't open and make ".CMSIX_PATH_FILE);
 		goto skip;                              // Fatal error
 	}
 	if (isset($_FILES['files'])) {
-		$uploaded_file_paths = file_add($_FILES['files'], DPATH);
+		$uploaded_file_paths = file_add($_FILES['files']);
 		file_img_optimize($uploaded_file_paths);
 	}
 	if (isset($_GET['remove']) and
 	    isset($_GET['files'])) {
-		file_rm($_GET['files'], DPATH);
+		file_rm($_GET['files']);
 	}
-	$data = file_ls(DPATH);
+	$data = file_ls();
 	$data = array_filter($data, fn($v) => !file_ignore($v));
 	break;
 case Page::Text:
 	$data = [];
-	if (!is_resource(fopen(FPATH, 'rb'))) {
-		array_push($msg, "ERROR: Can't open ".FPATH);
+	if (!is_resource(fopen(CMSIX_PATH_TEXT, 'rb'))) {
+		array_push($msg, "ERROR: Can't open ".CMSIX_PATH_TEXT);
 		goto skip;                              // Fatal error
 	}
 	if (count($_POST)) {
@@ -370,7 +375,7 @@ case Page::Text:
 	    isset($_GET['keys'])) {
 		text_rm($_GET['keys']);
 	}
-	$data = cmsix\read(FPATH);
+	$data = cmsix_read();
 	break;
 }
 skip:           // GOTO label to skip code in case of fatal error
@@ -426,9 +431,9 @@ a:hover { text-decoration: none }
 	}
 	</style>
 	<menu>
-		<li><a href=<?=$url_root?>>texts</a>
-		<li><a href=<?=$url_root.'file'?>>files</a>
-		<li><a href=<?=$url_root.'logout'?>>logout</a>
+		<li><a href=<?=CMSIX_URL_ROOT?>>texts</a>
+		<li><a href=<?=CMSIX_URL_ROOT.'/file'?>>files</a>
+		<li><a href=<?=CMSIX_URL_ROOT.'/logout'?>>logout</a>
 	</menu>
 <?php endif ?>
 <?php switch($page): ?>
@@ -436,7 +441,7 @@ a:hover { text-decoration: none }
 	<h1>Hash</h1>
 	<p>Create hash and salt for given password. Use created values in <code>index.php</code>.</p>
 	<form>
-		<input type=password name=pass placeholder=password required autofocus>
+		<input type=text name=pass placeholder=password required autofocus>
 		<input type=submit>
 	</form>
 <?php break ?>
@@ -453,14 +458,14 @@ a:hover { text-decoration: none }
 	<p>You have been loged out.</p>
 	<ul>
 		<li><a href=/>home page</a></li>
-		<li><a href=<?=$url_root.'login'?>>login page</a></li>
+		<li><a href=<?=CMSIX_URL_ROOT.'login'?>>login page</a></li>
 	</ul>
 <?php break ?>
 <?php case Page::Text: ?>
 	<style>
 	input[type=text], textarea {
-		min-width: 100%;
-		max-width: 100%;
+		resize: vertical;
+		width: 100%;
 		box-sizing: border-box;
 		border: solid 1px currentColor;
 	}
@@ -475,7 +480,7 @@ a:hover { text-decoration: none }
 	<h2>Add new value</h2>
 	<form>
 		<input type=text name=key placeholder=key required />
-		<textarea cols=80 rows=5 name=value placeholder=value required></textarea>
+		<textarea cols=80 rows=5 name=value placeholder=value rows=5 required></textarea>
 		<input type=submit name=add value=add />
 	</form>
 	<h2>Modify or remove existing values</h2>
@@ -483,14 +488,23 @@ a:hover { text-decoration: none }
 	<form id=text-remove method=get></form>
 	<?php foreach ($data as $k => $v): ?>
 		<h3 id=<?=$k?>><code><?=$k?></code></h3>
-		<textarea form=text-edit cols=80 rows=<?=substr_count($v,"\n")+1?> name=<?=$k?>><?=$v?></textarea>
+<!-- This strange new line in textarea is necessary.                    -->
+<!-- Without it we will lose first empty line in value starts with one. -->
+		<textarea form=text-edit name=<?=$k?>>
+<?=$v?></textarea>
 		<label for="remove-<?=$k?>">Remove</label>
 		<input form=text-remove id="remove-<?=$k?>" type=checkbox name=keys[] value="<?=$k?>">
 	<?php endforeach ?>
 	<p>
-		<input form=text-remove name=remove type=submit value=remove>
-		<input form=text-edit type=submit value=edit>
+		<input form=text-remove name=remove type=submit value="Remove selected">
+		<input form=text-edit type=submit value=Update>
 	</p>
+	<script>
+	// Set textarea height so it shows whole text.
+	for (const el of document.querySelectorAll('textarea')) {
+		el.style.height = el.scrollHeight + 8 + 'px' // 8px padding
+	}
+	</script>
 <?php break ?>
 <?php case Page::File: ?>
 	<style>
@@ -507,10 +521,10 @@ a:hover { text-decoration: none }
 	<form>
 		<?php foreach ($data as $k => $f): ?>
 			<p>
-				<a href=<?=$url_root.DPATH.$f?>>
-					<?=$url_root.DPATH.$f?>
+				<a href=<?=CMSIX_URL_FILE.$f?>>
+					<?=$f?>
 					<?php if (file_is_img($f)): ?>
-						<?=cmsix\img(DPATH.$f, [ "sizes" => "20vw" ])?>
+						<?=cmsix_img($f, [ "sizes" => "20vw" ])?>
 					<?php endif ?>
 				</a>
 				<label for=remove<?=$k?>>Remove</label>
